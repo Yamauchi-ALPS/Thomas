@@ -74,12 +74,12 @@ public class ThomasBroadcastReceiver extends BroadcastReceiver {
 		            	// Second Read
 		    	        AlarmManager am =
 		    	                (AlarmManager)arg0.getSystemService(Context.ALARM_SERVICE);
-		    	        Intent sendIntent = new Intent( ThomasBroadcastReceiver.ACTION_TIME_COUNT );
+		    	        Intent sendIntent = new Intent( ThomasBroadcastReceiver.ACTION_SPEECH );
 		    	        sendIntent.putExtra("text", message );
 		    	        PendingIntent alarmIntent = PendingIntent.getBroadcast
 		                        (arg0, 0, sendIntent, PendingIntent.FLAG_UPDATE_CURRENT);
 		    	        am.set(AlarmManager.ELAPSED_REALTIME_WAKEUP,
-		    	        		SystemClock.elapsedRealtime() + 10000, alarmIntent);
+		    	        		SystemClock.elapsedRealtime() + 20000, alarmIntent);
 		            }
 		        }
 	    		Log.d("THOMAS", "BT Connected: Read SMS" );
@@ -126,22 +126,17 @@ public class ThomasBroadcastReceiver extends BroadcastReceiver {
             Log.d("THOMAS", "network is " + (connected ? "connected" : "disconnected"));
 		}else if( action.equals( ACTION_TEST ) ){
     		Log.d("THOMAS", "ACTION_TEST" );
-	        String text = arg1.getStringExtra("text");
-	        startSpeech(arg0, text);
+//	        String text = arg1.getStringExtra("text");
+//	        startSpeech(arg0, text);
+        	String name = ContactsUtil.getNameByPhoneNumber(arg0, "09091446538");
+    		
 		}else if( action.equals( ACTION_SPEECH ) ){
     		Log.d("THOMAS", "ACTION_SPEECH" );
 	        String text = arg1.getStringExtra("text");
 	        startSpeech(arg0, text);
 		}else if( action.equalsIgnoreCase( ACTION_TIME_COUNT ) ){
     		Log.d("THOMAS", "ACTION_TIME_COUNT" );
-			if( btConnected(arg0) ){
-	            Intent intent = new Intent(arg0,ThomasService.class);
-	            intent.putExtra( ThomasService.EXTRA_EVENT, ThomasService.EVENT_TIME_COUNT );
-	            arg0.startService(intent);
-	    		Log.d("THOMAS", "BT Connected: Read SMS" );
-			}else{
-	    		Log.d("THOMAS", "BT Disconnected: Don't Read SMS" );
-			}
+    		startTimeCount(arg0);
 		}else if( action.equalsIgnoreCase( ACTION_GET_NEWS ) ){
     		Log.d("THOMAS", "ACTION_GET_NEWS" );
             Intent intent = new Intent(arg0,ThomasService.class);
@@ -172,6 +167,7 @@ public class ThomasBroadcastReceiver extends BroadcastReceiver {
             
              //Bluetooth On
         	mBtConnect = true;
+        	startTimeCount( context );
     		Log.d("THOMAS", "BT Connect: On" );
         }else if(( btType == BT_CONNECT_STATE &&
                 prevState != BluetoothHeadset.STATE_DISCONNECTED &&
@@ -187,15 +183,21 @@ public class ThomasBroadcastReceiver extends BroadcastReceiver {
 	}
 
     private void startSpeech( Context context, String text ){
-		if( btConnected(context) ){
+//		if( btConnected(context) ){
     		Log.d("THOMAS", "BT Connected: Read SMS" );
 	        Intent intent = new Intent(context,ThomasService.class);
 	        intent.putExtra( ThomasService.EXTRA_EVENT, ThomasService.EVENT_SPEECH );
 	        intent.putExtra( ThomasService.EXTRA_DATA, text);
 	        context.startService(intent);
-		}else{
-    		Log.d("THOMAS", "BT Disconnected: Don't Read SMS" );
-		}
+//		}else{
+//    		Log.d("THOMAS", "BT Disconnected: Don't Read SMS" );
+//		}
+    }
+    
+    private void startTimeCount( Context context ){
+        Intent intent = new Intent(context,ThomasService.class);
+        intent.putExtra( ThomasService.EXTRA_EVENT, ThomasService.EVENT_TIME_COUNT );
+        context.startService(intent);
     }
     
     private void startGps( Context context, String mdn ){

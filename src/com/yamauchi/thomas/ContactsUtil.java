@@ -20,14 +20,17 @@ public class ContactsUtil {
 		Uri uri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI;
 		String[] projection    = new String[] {ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
 		                ContactsContract.CommonDataKinds.Phone.NUMBER};
-		String condition = ContactsContract.CommonDataKinds.Phone.NUMBER +" = "+ phone;
-		Cursor people = context.getContentResolver().query(uri, projection, condition, null, null);
+		String condition = ContactsContract.CommonDataKinds.Phone.NUMBER +" = ?";
+		String [] selection = { phone };
+		Cursor people = context.getContentResolver().query(uri, projection, condition, selection, null);
 		if( people != null ){
-			int indexName = people.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME);
-//			int indexNumber = people.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER);
-			people.moveToFirst();
-		    ret   = people.getString(indexName);
-//		    String number = people.getString(indexNumber);
+			if( people.getCount() > 0 ){
+				int indexName = people.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME);
+//				int indexNumber = people.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER);
+				people.moveToFirst();
+			    ret   = people.getString(indexName);
+//			    String number = people.getString(indexNumber);
+			}
 		    people.close();
 		}
 		return ret;

@@ -150,14 +150,21 @@ public class MainActivity extends Activity implements OnClickListener {
 		        intent.putExtra( ThomasService.EXTRA_DATA, "09086182049");
 		        this.startService(intent);
 			}else{
-				if( !pref.isGetNewsOn() ){
-					pref.setGetNewsOn(true);
-			        Intent intent = new Intent(this,ThomasService.class);
-			        intent.putExtra( ThomasService.EXTRA_EVENT, ThomasService.EVENT_GET_GPS );
-			        this.startService(intent);
-				}else{
-					pref.setGetNewsOn(false);
-				}
+//				if( !pref.isGetNewsOn() ){
+//					pref.setGetNewsOn(true);
+//			        Intent intent = new Intent(this,ThomasService.class);
+//			        intent.putExtra( ThomasService.EXTRA_EVENT, ThomasService.EVENT_GET_GPS );
+//			        this.startService(intent);
+//				}else{
+//					pref.setGetNewsOn(false);
+//				}
+				String name;
+	        	name = ContactsUtil.getNameByPhoneNumber(this, "09091446538");
+            	String message = name + "さんからSMSです。    " + "テスト";
+		        Intent intent = new Intent(this,ThomasService.class);
+		        intent.putExtra( ThomasService.EXTRA_EVENT, ThomasService.EVENT_SPEECH );
+		        intent.putExtra( ThomasService.EXTRA_DATA, message);
+		        this.startService(intent);
 			}
 			break;
 		}

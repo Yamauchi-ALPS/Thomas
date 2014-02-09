@@ -331,7 +331,7 @@ public boolean onUnbind(Intent intent) {
 	        PendingIntent alarmIntent = PendingIntent.getBroadcast
                     (this, 0, sendIntent, PendingIntent.FLAG_UPDATE_CURRENT);
 	        am.set(AlarmManager.ELAPSED_REALTIME_WAKEUP,
-	        		SystemClock.elapsedRealtime() + 60000, alarmIntent);
+	        		SystemClock.elapsedRealtime() + 6000, alarmIntent);
 
 	        Calendar calendar = Calendar.getInstance();
 	        int hour = calendar.get(Calendar.HOUR_OF_DAY);
@@ -471,12 +471,12 @@ public boolean onUnbind(Intent intent) {
               // 隱ｭ縺ｿ荳翫￡荳ｭ縺ｪ繧画ｭ｢繧√ｋ
               tts.stop();
           }
-          tts.setPitch(0.8f);
+          tts.setPitch(1.0f);
           tts.setSpeechRate(1.3f);
           tts.setLanguage(Locale.JAPANESE);
           HashMap<String, String> params = new HashMap<String, String>();
           params.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID,"stringId");
-          params.put(TextToSpeech.Engine.KEY_PARAM_VOLUME, String.valueOf(0.8));
+          params.put(TextToSpeech.Engine.KEY_PARAM_VOLUME, String.valueOf(1.0));
           tts.speak(str, TextToSpeech.QUEUE_FLUSH, params);
           mSpeechText = null;
           Log.d("THOMAS", "Speak!!");

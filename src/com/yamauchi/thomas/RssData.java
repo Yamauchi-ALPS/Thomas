@@ -20,25 +20,27 @@ import android.widget.Toast;
 public class RssData implements Serializable{
 	private String saveData = null; 
 	static private final String SAVE_FOLDER = "/data/data/com.yamauchi.thomas/files/";
-	static private final String SAVE_FILE = "/rss.dat";
-	private ArrayList<String> arrayList = new ArrayList();
+	static private final String SAVE_FILE = ".dat";
+	private ArrayList<String> newsAllay = new ArrayList();
 	private int mCount = 0;
+	private String mName = "rss";
 	
-	public RssData( String data){
+	public RssData( String name, String data){
+		mName = name;
 		saveData = data;
 	}
 	
-    public void parseXML(Context context) {
+    static public RssData parseXML(Context context, String rssData) {
     	RssData data = null;
-        if( saveData.isEmpty() ){
-            return;
+        if( rssData.isEmpty() ){
+            return data;
         }
         
         XmlPullParser parser = Xml.newPullParser();
         
         try {
             // auto-detect the encoding from the stream
-            InputStream is_xml = new ByteArrayInputStream(saveData.getBytes("UTF-8"));
+            InputStream is_xml = new ByteArrayInputStream(rssData.getBytes("UTF-8"));
             parser.setInput(is_xml, "UTF-8");
             
             int eventType = parser.getEventType();
@@ -62,6 +64,7 @@ public class RssData implements Serializable{
             }
         } catch (Exception e) {
         }
+        return data;
     }
 
     public boolean serialize( Context context, boolean saveVoice ){
@@ -76,7 +79,7 @@ public class RssData implements Serializable{
         
         try {
             //Serialize
-            FileOutputStream fos = new FileOutputStream(new File(SAVE_FOLDER + SAVE_FILE));
+            FileOutputStream fos = new FileOutputStream(new File(SAVE_FOLDER + "/" + mName + SAVE_FILE));
             ObjectOutputStream oos = new ObjectOutputStream(fos);
             oos.writeObject(this);
             oos.close();
@@ -88,10 +91,10 @@ public class RssData implements Serializable{
         return ret;
     }
 
-    static public RssData deSerialize( Context context ){
+    static public RssData deSerialize( String name, Context context ){
     	RssData ret = null;
         try {
-            FileInputStream fis = new FileInputStream(new File(SAVE_FOLDER + SAVE_FILE));
+            FileInputStream fis = new FileInputStream(new File(SAVE_FOLDER + "/" + name + SAVE_FILE));
             ObjectInputStream ois = new ObjectInputStream(fis);
             ret = (RssData) ois.readObject();
             ois.close();
@@ -100,7 +103,7 @@ public class RssData implements Serializable{
         }
         
         if( ret != null ){
-        	ret.parseXML( context );
+//        	ret.parseXML( context );
         }
         
         return ret;
