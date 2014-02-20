@@ -29,6 +29,7 @@ import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.media.AudioManager;
+import android.media.AudioManager.OnAudioFocusChangeListener;
 import android.net.http.AndroidHttpClient;
 import android.os.BatteryManager;
 import android.os.Bundle;
@@ -55,8 +56,7 @@ public class ThomasService extends Service implements TextToSpeech.OnInitListene
 	public static final int EVENT_GET_NEWS    = 0x04;
 	public static final int EVENT_GET_GPS     = 0x08;
 	
-	private static final int HANDL_SPEECH_START = 1;
-	
+	private static final int HANDL_SPEECH_START = 1;	
 	private final String MAP_URL = "http://maps.google.com/maps?q=";
 	
 	private TextToSpeech tts = null;
@@ -66,6 +66,7 @@ public class ThomasService extends Service implements TextToSpeech.OnInitListene
 	ThomasSharedPreferences mPref;
 	private LocationManager mLocationManager = null;
 	private BroadcastReceiver mReceiver = null;
+	private int mMediaVolume = 0;
 	
 	private int [][] timeTable = {
 		{0,9,18},	//0
@@ -331,7 +332,7 @@ public boolean onUnbind(Intent intent) {
 	        PendingIntent alarmIntent = PendingIntent.getBroadcast
                     (this, 0, sendIntent, PendingIntent.FLAG_UPDATE_CURRENT);
 	        am.set(AlarmManager.ELAPSED_REALTIME_WAKEUP,
-	        		SystemClock.elapsedRealtime() + 6000, alarmIntent);
+	        		SystemClock.elapsedRealtime() + 60000, alarmIntent);
 
 	        Calendar calendar = Calendar.getInstance();
 	        int hour = calendar.get(Calendar.HOUR_OF_DAY);
@@ -502,11 +503,19 @@ public boolean onUnbind(Intent intent) {
                     if( mSpeechText == null ){
                         eventFinish(EVENT_SPEECH);
                     }
+		    		AudioManager am = (AudioManager)ThomasService.this.getSystemService(Context.AUDIO_SERVICE);
+//		    		am.setStreamMute(AudioManager.STREAM_MUSIC, false);
+		    		am.abandonAudioFocus(audioListener);
+		    		am.setStreamVolume(AudioManager.STREAM_MUSIC, mMediaVolume, 0);
 				}
 
 				@Override
 				public void onError(String arg0) {
 		            Log.d("THOMAS", "speech error" );
+		    		AudioManager am = (AudioManager)ThomasService.this.getSystemService(Context.AUDIO_SERVICE);
+//		    		am.setStreamMute(AudioManager.STREAM_MUSIC, false);
+		    		am.abandonAudioFocus(audioListener);
+		    		am.setStreamVolume(AudioManager.STREAM_MUSIC, mMediaVolume, 0);
                     mSpeechText = null;
                     eventFinish(EVENT_SPEECH);
                 }
@@ -514,6 +523,12 @@ public boolean onUnbind(Intent intent) {
 				@Override
 				public void onStart(String arg0) {
 		            Log.d("THOMAS", "speech start" );
+		    		AudioManager am = (AudioManager)ThomasService.this.getSystemService(Context.AUDIO_SERVICE);
+		    		mMediaVolume = am.getStreamVolume(AudioManager.STREAM_MUSIC);
+		            int result = am.requestAudioFocus( audioListener,
+                            AudioManager.STREAM_MUSIC,
+                            AudioManager.AUDIOFOCUS_GAIN);
+		    		am.setStreamVolume(AudioManager.STREAM_MUSIC, am.getStreamMaxVolume(AudioManager.STREAM_MUSIC), 0);
 				}
             });
             
@@ -528,6 +543,12 @@ public boolean onUnbind(Intent intent) {
 	    }
 	}
 
+	private OnAudioFocusChangeListener audioListener = new OnAudioFocusChangeListener(){
+		@Override
+		public void onAudioFocusChange(int focusChange) {
+		}
+	};
+	
 	private void eventFinish( int event ){
 	    setEvent(event, false);
 		if( mWorkingEvent == EVENT_NONE ){

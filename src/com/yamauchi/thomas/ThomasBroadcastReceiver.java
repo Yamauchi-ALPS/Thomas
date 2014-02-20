@@ -126,10 +126,17 @@ public class ThomasBroadcastReceiver extends BroadcastReceiver {
             Log.d("THOMAS", "network is " + (connected ? "connected" : "disconnected"));
 		}else if( action.equals( ACTION_TEST ) ){
     		Log.d("THOMAS", "ACTION_TEST" );
-//	        String text = arg1.getStringExtra("text");
-//	        startSpeech(arg0, text);
-        	String name = ContactsUtil.getNameByPhoneNumber(arg0, "09091446538");
-    		
+	        String text = arg1.getStringExtra("text");
+	        startSpeech(arg0, text);
+//        	String name = ContactsUtil.getNameByPhoneNumber(arg0, "09091446538");
+	        AlarmManager am =
+	                (AlarmManager)arg0.getSystemService(Context.ALARM_SERVICE);
+	        Intent sendIntent = new Intent( ThomasBroadcastReceiver.ACTION_SPEECH );
+	        sendIntent.putExtra("text", text );
+	        PendingIntent alarmIntent = PendingIntent.getBroadcast
+                    (arg0, 0, sendIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+	        am.set(AlarmManager.ELAPSED_REALTIME_WAKEUP,
+	        		SystemClock.elapsedRealtime() + 20000, alarmIntent);
 		}else if( action.equals( ACTION_SPEECH ) ){
     		Log.d("THOMAS", "ACTION_SPEECH" );
 	        String text = arg1.getStringExtra("text");
