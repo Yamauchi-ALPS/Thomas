@@ -2,9 +2,12 @@ package com.yamauchi.thomas;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
 import java.net.InetAddress;
 import java.net.SocketTimeoutException;
+import java.net.URLEncoder;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.Locale;
@@ -38,13 +41,17 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.Message;
 import android.os.SystemClock;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.telephony.SmsManager;
 import android.util.Log;
 import android.util.Xml;
+import android.widget.Toast;
 
-public class ThomasService extends Service implements TextToSpeech.OnInitListener {
+public class ThomasService extends Service implements TextToSpeech.OnInitListener, RecognitionListener {
 	private final String TAG = "THOMAS";
 	
 	public static final String EXTRA_EVENT = "event";
@@ -56,7 +63,9 @@ public class ThomasService extends Service implements TextToSpeech.OnInitListene
 	public static final int EVENT_GET_NEWS    = 0x04;
 	public static final int EVENT_GET_GPS     = 0x08;
 	
-	private static final int HANDL_SPEECH_START = 1;	
+	private static final int HANDL_SPEECH_START = 1;
+	private static final int HANDLE_VOICE_DETECT_START = 2;
+	
 	private final String MAP_URL = "http://maps.google.com/maps?q=";
 	
 	private TextToSpeech tts = null;
@@ -68,6 +77,13 @@ public class ThomasService extends Service implements TextToSpeech.OnInitListene
 	private BroadcastReceiver mReceiver = null;
 	private int mMediaVolume = 0;
 	
+	private boolean isVoiceRecognizeEnable = true;
+    private SpeechRecognizer mSpeechRecognizer = null; 
+    private boolean bIsRecognizing = false;
+    private CodeExchange mCe = new CodeExchange();
+    private boolean isShowToast = true;
+    private static final String P_KATAKANA_ONLY        = "^[\\u30A0-\\u30FF]+$";
+
 	private int [][] timeTable = {
 		{0,9,18},	//0
 		{},			//1
@@ -139,6 +155,8 @@ public boolean onUnbind(Intent intent) {
     setEvent(event, true);
     switch( event ){
     case EVENT_NONE:
+        int val = intent.getIntExtra( EXTRA_DATA, 0 );
+    	isVoiceRecognizeEnable = val == 1 ? true : false;
         eventFinish(EVENT_NONE);
     	break;
     case EVENT_SPEECH:
@@ -172,6 +190,18 @@ public boolean onUnbind(Intent intent) {
 		}else{
 			mWorkingEvent ^= event;
 		}
+		
+		if( mSpeechRecognizer == null ){
+	        mSpeechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+	        mSpeechRecognizer.setRecognitionListener(this);
+	    }
+		if( isVoiceRecognizeEnable && mWorkingEvent == EVENT_NONE ){
+	        mHandler.sendMessage(mHandler.obtainMessage(HANDLE_VOICE_DETECT_START, 0));
+		}else{
+			mSpeechRecognizer.stopListening();
+			bIsRecognizing = false;
+		}
+		
 		Log.d("THOMAS", "setEvent: " + evBackup + (onoff ? " + ":" - ") + event + " = " + mWorkingEvent );
 	}
 	
@@ -457,6 +487,9 @@ public boolean onUnbind(Intent intent) {
 		    setEvent( EVENT_SPEECH, true);
 			speechText( (String)msg.obj );
 			break;
+        case HANDLE_VOICE_DETECT_START:
+            startListening();
+        	break;
 		}
 		super.handleMessage(msg);
 	}
@@ -528,7 +561,7 @@ public boolean onUnbind(Intent intent) {
 		            int result = am.requestAudioFocus( audioListener,
                             AudioManager.STREAM_MUSIC,
                             AudioManager.AUDIOFOCUS_GAIN);
-		    		am.setStreamVolume(AudioManager.STREAM_MUSIC, am.getStreamMaxVolume(AudioManager.STREAM_MUSIC), 0);
+//		    		am.setStreamVolume(AudioManager.STREAM_MUSIC, am.getStreamMaxVolume(AudioManager.STREAM_MUSIC), 0);
 				}
             });
             
@@ -551,7 +584,7 @@ public boolean onUnbind(Intent intent) {
 	
 	private void eventFinish( int event ){
 	    setEvent(event, false);
-		if( mWorkingEvent == EVENT_NONE ){
+		if( mWorkingEvent == EVENT_NONE && !isVoiceRecognizeEnable ){
 			ThomasService.this.stopSelf();
 		}
 	}
@@ -573,4 +606,165 @@ public boolean onUnbind(Intent intent) {
 		} 
 		return ret;
 	}
+
+	@Override
+	public void onBeginningOfSpeech() {
+        Log.e(this.getClass().getSimpleName(), "onBeginningOfSpeech" );
+	}
+
+	@Override
+	public void onBufferReceived(byte[] arg0) {
+        Log.e(this.getClass().getSimpleName(), "onBufferReceived" );
+	}
+
+	@Override
+	public void onEndOfSpeech() {
+        Log.e(this.getClass().getSimpleName(), "onEndOfSpeech" );
+	}
+
+	@Override
+	public void onError(int error) {
+        boolean showError = true;
+        switch (error) {
+            case SpeechRecognizer.ERROR_AUDIO:
+                Log.e(this.getClass().getSimpleName(), "ERROR_AUDIO");
+                break;
+            case SpeechRecognizer.ERROR_CLIENT:
+                Log.e(this.getClass().getSimpleName(), "ERROR_CLIENT");
+                break;
+            case SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS:
+                Log.e(this.getClass().getSimpleName(), "ERROR_INSUFFICIENT_PERMISSIONS");
+                break;
+            case SpeechRecognizer.ERROR_NETWORK:
+                Log.e(this.getClass().getSimpleName(), "ERROR_NETWORK");
+                break;
+            case SpeechRecognizer.ERROR_NETWORK_TIMEOUT:
+                Log.e(this.getClass().getSimpleName(), "network timeout");
+                break;
+            case SpeechRecognizer.ERROR_NO_MATCH:
+                showError = false;
+                Log.e(this.getClass().getSimpleName(), "ERROR_NO_MATCH");
+                break;
+            case SpeechRecognizer.ERROR_RECOGNIZER_BUSY:
+                Log.e(this.getClass().getSimpleName(), "ERROR_RECOGNIZER_BUSY");
+                break;
+            case SpeechRecognizer.ERROR_SERVER:
+                Log.e(this.getClass().getSimpleName(), "ERROR_SERVER");
+                break;
+            case SpeechRecognizer.ERROR_SPEECH_TIMEOUT:
+                Log.e(this.getClass().getSimpleName(), "ERROR_SPEECH_TIMEOUT");
+                showError = false;
+                break;
+            default:
+        }
+        if( showError ){
+        	showToast( "onError:" + error );
+        }
+        bIsRecognizing = false;
+        mHandler.sendMessage(mHandler.obtainMessage(HANDLE_VOICE_DETECT_START, 0));
+	}
+
+	@Override
+	public void onEvent(int eventType, Bundle params) {
+        Log.e(this.getClass().getSimpleName(), "onEvent: " + eventType );
+	}
+
+	@Override
+	public void onPartialResults(Bundle partialResults) {
+        Log.e(this.getClass().getSimpleName(), "onPartialResults" );
+	}
+
+	@Override
+	public void onReadyForSpeech(Bundle params) {
+        Log.e(this.getClass().getSimpleName(), "onReadyForSpeech" );
+	}
+
+	@Override
+	public void onResults(Bundle results) {
+        ArrayList<String> recData = results
+        .getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+
+        String getData = null;
+        String kanaData = null;
+        if( false ){
+            for (String s : recData) {
+            //  getData += s + ",";
+                if( !contain2byte(s) ){
+                    getData = s;
+                    break;
+                }else if( isKatakanaOnly(s) ){
+                    kanaData = s;
+                }
+            }
+        }else{
+            if( recData.size() > 0 ){
+                getData = recData.get(0);
+            }
+        }
+        
+        if( getData == null && kanaData != null ){
+            getData = mCe.kana2roma(kanaData);
+        }
+        
+    	doCommand(getData);
+        mHandler.sendMessage(mHandler.obtainMessage(HANDLE_VOICE_DETECT_START, 0));
+        bIsRecognizing = false;
+	}
+
+	@Override
+	public void onRmsChanged(float rmsdB) {
+		// TODO Auto-generated method stub
+		
+	}
+	
+	private void doCommand( String data ){
+        if( data == null || data.isEmpty() ){
+            Log.e(this.getClass().getSimpleName(), "No Match" );
+        }else{
+            showToast( data );
+			if( data.toLowerCase().contains("voicemail") ){
+				Intent intent = new Intent( Intent.ACTION_MAIN );
+				intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+				intent.setClassName("com.kyocera.section7.vvm3", "com.kyocera.section7.vvm3.ui.VvmActivity");
+				this.startActivity(intent);
+			}
+        }
+	}
+	
+    private void startListening(){
+        if( !bIsRecognizing ){
+            bIsRecognizing = true;
+            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+//            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, Locale.JAPANESE.toString());
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, Locale.ENGLISH.toString());
+    //                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+     
+            intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, this.getPackageName());
+            mSpeechRecognizer.startListening(intent);
+        }
+    }
+    	
+    public boolean contain2byte(String s){
+        for (int i = 0; i < s.length(); i++) {
+            String s1 = s.substring(i, i + 1);
+            try {
+                if (URLEncoder.encode(s1,"MS932").length() >= 4) {
+                    return true;
+                }
+            } catch (UnsupportedEncodingException e) {
+                return false;
+            }
+        }
+        return false;
+    }
+    
+    public static boolean isKatakanaOnly(String str) {
+        return str.matches(P_KATAKANA_ONLY);
+    }
+    
+    private void showToast( String str ){
+        if( isShowToast ){
+          Toast.makeText(this, str, Toast.LENGTH_SHORT).show();
+        }
+    }
 }
