@@ -178,6 +178,13 @@ public class MainActivity extends Activity implements OnClickListener {
 	        intent.putExtra( ThomasService.EXTRA_DATA, 0 );
 	        this.startService(intent);
 		}
+		case R.id.button6:
+		{
+	        Intent intent = new Intent(this,ThomasService.class);
+	        intent.putExtra( ThomasService.EXTRA_EVENT, ThomasService.EVENT_DETECT_SCREEN );
+	        intent.putExtra( ThomasService.EXTRA_DATA, 0 );
+	        this.startService(intent);
+		}
 			break;
 		}
 	}

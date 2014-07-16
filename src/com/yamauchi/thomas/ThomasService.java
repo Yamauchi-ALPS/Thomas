@@ -41,6 +41,7 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.Message;
 import android.os.SystemClock;
+import android.os.Vibrator;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
@@ -62,9 +63,12 @@ public class ThomasService extends Service implements TextToSpeech.OnInitListene
 	public static final int EVENT_TIME_COUNT  = 0x02;
 	public static final int EVENT_GET_NEWS    = 0x04;
 	public static final int EVENT_GET_GPS     = 0x08;
+	public static final int EVENT_DETECT_SCREEN = 0x10;
 	
 	private static final int HANDL_SPEECH_START = 1;
 	private static final int HANDLE_VOICE_DETECT_START = 2;
+	private static final int HANDLE_EVENT_FINISH = 3;
+	private static final int POWER_KEY_COMMAND = 4;
 	
 	private final String MAP_URL = "http://maps.google.com/maps?q=";
 	
@@ -77,11 +81,12 @@ public class ThomasService extends Service implements TextToSpeech.OnInitListene
 	private BroadcastReceiver mReceiver = null;
 	private int mMediaVolume = 0;
 	
-	private boolean isVoiceRecognizeEnable = true;
+	private boolean isVoiceRecognizeEnable = false;
     private SpeechRecognizer mSpeechRecognizer = null; 
     private boolean bIsRecognizing = false;
     private CodeExchange mCe = new CodeExchange();
     private boolean isShowToast = true;
+    private int pwKeyCnt = 0;
     private static final String P_KATAKANA_ONLY        = "^[\\u30A0-\\u30FF]+$";
 
 	private int [][] timeTable = {
@@ -119,6 +124,25 @@ public class ThomasService extends Service implements TextToSpeech.OnInitListene
 	private final float POS_STATION_SAPPORO[] = { 43.068085f, 141.350201f };
 	private final float POS_STATION_24[]      = { 43.090203f, 141.344611f };
 	
+    private BroadcastReceiver mScreenOnListener = new BroadcastReceiver() {   
+    	  
+        @Override  
+        public void onReceive(Context context, Intent intent) {   
+            String action = intent.getAction();
+            long timeout = 2000;
+            if (action.equals(Intent.ACTION_SCREEN_ON) || action.equals(Intent.ACTION_SCREEN_OFF)) {
+				if( ++pwKeyCnt == 2 ){
+					timeout = 2000;
+	            	Vibrator vib = (Vibrator)context.getSystemService(Context.VIBRATOR_SERVICE);
+	                long [] pattern = {150, 150, 150, 150};
+	                vib.vibrate(pattern, -1);
+				}
+			    Log.d(TAG, "PowerKeyCommand: " + pwKeyCnt );
+	            mHandler.sendMessageDelayed(mHandler.obtainMessage( POWER_KEY_COMMAND, pwKeyCnt, 0), timeout);
+            }   
+        }   
+    };   
+	
 	@Override
 	public IBinder onBind(Intent arg0) {
 		return null;
@@ -134,16 +158,20 @@ public class ThomasService extends Service implements TextToSpeech.OnInitListene
   @Override
 public void onTaskRemoved(Intent rootIntent) {
 	isInit = false;
-	tts.shutdown();
-	tts = null;
+	if( tts != null ){
+		tts.shutdown();
+		tts = null;
+	}
 	super.onTaskRemoved(rootIntent);
 }
 
 @Override
 public boolean onUnbind(Intent intent) {
 	isInit = false;
-	tts.shutdown();
-	tts = null;
+	if( tts != null ){
+		tts.shutdown();
+		tts = null;
+	}
 	return super.onUnbind(intent);
 }
 
@@ -179,6 +207,13 @@ public boolean onUnbind(Intent intent) {
     	eventBattery( intent.getStringExtra( EXTRA_DATA ));
 //    	eventGps( intent.getStringExtra( EXTRA_DATA ) );
     	break;
+    case EVENT_DETECT_SCREEN:
+    	pwKeyCnt = 0;
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_SCREEN_ON);   
+        filter.addAction(Intent.ACTION_SCREEN_OFF);   
+        registerReceiver(mScreenOnListener, filter);
+        break;
     }
     return START_STICKY;
   }
@@ -490,6 +525,51 @@ public boolean onUnbind(Intent intent) {
         case HANDLE_VOICE_DETECT_START:
             startListening();
         	break;
+        case HANDLE_EVENT_FINISH:
+        	eventFinish(msg.arg1);
+        	break;
+        case POWER_KEY_COMMAND:
+        	if( msg.arg1 >= pwKeyCnt ){
+            	Vibrator vib = (Vibrator)ThomasService.this.getSystemService(Context.VIBRATOR_SERVICE);
+            	if( pwKeyCnt == 2 ){
+	                long [] pattern = {700,100};
+	                vib.vibrate(pattern, -1);
+            	}else if( pwKeyCnt > 2 ){
+	                long [] pattern = {100,100};
+	                vib.vibrate(pattern, -1);
+        		}
+        		
+    	    	switch( pwKeyCnt ){
+    	    	case 3:
+    	    	{
+    			    Log.d(TAG, "PowerKeyCommand: Speech" );
+    		        Calendar calendar = Calendar.getInstance();
+    		        int hour = calendar.get(Calendar.HOUR_OF_DAY);
+    		        int minute = calendar.get(Calendar.MINUTE);
+    		        mSpeechText = String.valueOf(hour) + "時" + String.valueOf(minute) + "分";
+    			    setEvent( EVENT_SPEECH, true);
+    		        if( tts == null ){
+    		    		tts = new TextToSpeech(ThomasService.this, ThomasService.this);
+    		        }else{
+    		        	mHandler.sendMessage( mHandler.obtainMessage(HANDL_SPEECH_START, mSpeechText ));
+    		        }
+    	    	}
+    		        break;
+    	    	case 4:
+    	    	{
+    		        Calendar calendar = Calendar.getInstance();
+    		        int hour = calendar.get(Calendar.HOUR_OF_DAY);
+    		        int minute = calendar.get(Calendar.MINUTE);
+    		        String code = String.format("%02d%02d", hour, minute );
+    	    		MorseCodeGenerator.vibrate(ThomasService.this, code);
+    	    	}
+    	    		break;
+    	    		
+    	    	}
+    	    	pwKeyCnt = 0;
+			    Log.d(TAG, "PowerKeyCommand: " + pwKeyCnt );
+        	}
+			break;
 		}
 		super.handleMessage(msg);
 	}
@@ -507,7 +587,11 @@ public boolean onUnbind(Intent intent) {
           }
           tts.setPitch(1.0f);
           tts.setSpeechRate(1.3f);
-          tts.setLanguage(Locale.JAPANESE);
+          if( contain2byte(str) ){
+        	  tts.setLanguage(Locale.JAPANESE);
+          }else{
+        	  tts.setLanguage(Locale.ENGLISH);
+          }
           HashMap<String, String> params = new HashMap<String, String>();
           params.put(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID,"stringId");
           params.put(TextToSpeech.Engine.KEY_PARAM_VOLUME, String.valueOf(1.0));
@@ -534,7 +618,7 @@ public boolean onUnbind(Intent intent) {
 				public void onDone(String arg0) {
                     Log.d("THOMAS", "Speech Completed! :" + arg0);
                     if( mSpeechText == null ){
-                        eventFinish(EVENT_SPEECH);
+            	        mHandler.sendMessage(mHandler.obtainMessage(HANDLE_EVENT_FINISH, EVENT_SPEECH));
                     }
 		    		AudioManager am = (AudioManager)ThomasService.this.getSystemService(Context.AUDIO_SERVICE);
 //		    		am.setStreamMute(AudioManager.STREAM_MUSIC, false);
@@ -550,7 +634,7 @@ public boolean onUnbind(Intent intent) {
 		    		am.abandonAudioFocus(audioListener);
 		    		am.setStreamVolume(AudioManager.STREAM_MUSIC, mMediaVolume, 0);
                     mSpeechText = null;
-                    eventFinish(EVENT_SPEECH);
+        	        mHandler.sendMessage(mHandler.obtainMessage(HANDLE_EVENT_FINISH, EVENT_SPEECH));
                 }
 
 				@Override
